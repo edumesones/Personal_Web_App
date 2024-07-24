@@ -1,2 +1,3 @@
 /*.html
 !templates/**/*.html
+analisis.ipynb
