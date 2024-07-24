@@ -1,11 +1,16 @@
-from flask import Flask, render_template,send_file,abort,url_for
+from flask import Flask, render_template,send_file,abort,url_for,request
 import os
+import pandas as pd
 import subprocess
 import nbconvert
 from nbconvert import PDFExporter
 import pdfkit
 import nbformat
 import tempfile
+
+from sklearn.preprocessing import LabelEncoder
+import os
+from model_utils import read_data, preprocess_data, train_model
 app = Flask(__name__)
 
 @app.route('/')
@@ -24,9 +29,55 @@ def python_projects():
 def contact():
     return render_template('contact.html')
 
-@app.route('/ml-model')
+
+
+data = read_data(os.path.join(os.path.dirname(__file__), 'data_to_practice', 'data_deposit.csv'))
+X, y, label_encoders = preprocess_data(data)
+print(label_encoders)
+model = train_model(X, y)
+
+
+
+@app.route('/ml_model', methods=['GET', 'POST'])
 def ml_model():
-    return render_template('ml_model.html')
+    if request.method == 'POST':
+        # Get form data
+        form_data = request.form.to_dict()
+        print(form_data)
+        input_data = pd.DataFrame([form_data],columns=X.columns)
+
+        # Preprocess input data
+        for column in input_data.columns:
+            if column in label_encoders:
+                # Handle new categories
+                input_data[column] = input_data[column].map(lambda x: x if x in label_encoders[column].classes_ else 'Unknown')
+                
+                # Transform using LabelEncoder
+                input_data[column] = label_encoders[column].transform(input_data[column])
+            elif input_data[column].dtype == 'object':
+                # Convert to numeric if possible
+                input_data[column] = pd.to_numeric(input_data[column], errors='ignore')
+
+        # Ensure all columns from training data are present
+        for column in X.columns:
+            if column not in input_data.columns:
+                input_data[column] = 0
+
+        # Reorder columns to match training data
+        print(input_data)
+        input_data = input_data.reindex(columns=X.columns)
+
+        # Predict
+        try:
+            prediction = model.predict_proba(input_data)[:, 1][0]
+            print('pasa')
+            print(prediction)
+        except ValueError as e:
+            
+            return render_template('ml_model.html', error=str(e), form_data=form_data)
+        return render_template('ml_model.html', prediction=prediction, form_data=form_data)
+
+    return render_template('ml_model.html', prediction=None, form_data=None)
 
 @app.route('/working-now')
 def working_now():
