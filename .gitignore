@@ -1,3 +1,4 @@
 /*.html
 !templates/**/*.html
 analisis.ipynb
+a.txt
